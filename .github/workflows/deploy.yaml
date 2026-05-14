@@ -32,9 +32,38 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd ~/spam_classifier
-            git pull origin main
-            docker stop spam-classifier || true
-            docker rm spam-classifier || true
-            docker build -t spam-classifier .
-            docker run -d --name spam-classifier -p 8501:8501 --restart unless-stopped spam-classifier
+            set -e
+
+            APP_DIR="$HOME/spam_classifier"
+            REPO_URL="https://github.com/kallurivenkatesh4416-commits/spam_classifier.git"
+
+            if ! command -v git >/dev/null 2>&1 || ! command -v docker >/dev/null 2>&1; then
+              if command -v apt-get >/dev/null 2>&1; then
+                sudo apt-get update
+                sudo apt-get install -y git docker.io
+              elif command -v yum >/dev/null 2>&1; then
+                sudo yum install -y git docker
+              elif command -v dnf >/dev/null 2>&1; then
+                sudo dnf install -y git docker
+              else
+                echo "Could not find a supported package manager to install git and docker."
+                exit 1
+              fi
+            fi
+
+            sudo systemctl enable docker
+            sudo systemctl start docker
+
+            if [ ! -d "$APP_DIR/.git" ]; then
+              rm -rf "$APP_DIR"
+              git clone "$REPO_URL" "$APP_DIR"
+            fi
+
+            cd "$APP_DIR"
+            git fetch origin main
+            git reset --hard origin/main
+
+            sudo docker stop spam-classifier || true
+            sudo docker rm spam-classifier || true
+            sudo docker build -t spam-classifier .
+            sudo docker run -d --name spam-classifier -p 8501:8501 --restart unless-stopped spam-classifier
